@@ -12,6 +12,7 @@ import android.net.Uri;
 
 import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.Callback;
+import com.facebook.react.bridge.GuardedAsyncTask;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
@@ -33,86 +34,93 @@ public class ContactsManager extends ReactContextBaseJavaModule {
    * queries CommonDataKinds.Contactables to get phones and emails
    */
   @ReactMethod
-  public void getAll(Callback callback) {
-    ContentResolver cr = getReactApplicationContext().getContentResolver();
-    Uri uri = CommonDataKinds.Contactables.CONTENT_URI;
-    String selection = ContactsContract.Contacts.IN_VISIBLE_GROUP + " = " + 1;
-    String sortBy = CommonDataKinds.Contactables.LOOKUP_KEY;
+  public void getAll(final Callback callback) {
 
-    Cursor cursor = cr.query(uri, null, selection, null, sortBy);
+    new GuardedAsyncTask<Void, Void>(getReactApplicationContext()) {
+      @Override
+      protected void doInBackgroundGuarded(Void... params) {
+      
+        ContentResolver cr = getReactApplicationContext().getContentResolver();
+        Uri uri = CommonDataKinds.Contactables.CONTENT_URI;
+        String selection = ContactsContract.Contacts.IN_VISIBLE_GROUP + " = " + 1;
+        String sortBy = CommonDataKinds.Contactables.LOOKUP_KEY;
 
-    WritableArray contacts = Arguments.createArray(); // resultSet
+        Cursor cursor = cr.query(uri, null, selection, null, sortBy);
 
-    if (cursor.getCount() == 0) {
-      callback.invoke(null, contacts); // return empty if no contacts
-      return;
-    }
+        WritableArray contacts = Arguments.createArray(); // resultSet
 
-    int idColumnIndex = cursor.getColumnIndex(CommonDataKinds.Contactables._ID);
-    int nameColumnIndex = cursor.getColumnIndex(CommonDataKinds.Contactables.DISPLAY_NAME);
-    int lookupColumnIndex = cursor.getColumnIndex(CommonDataKinds.Contactables.LOOKUP_KEY);
-    int typeColumnIndex = cursor.getColumnIndex(CommonDataKinds.Contactables.MIMETYPE);
-    int photoColumnIndex = cursor.getColumnIndex(CommonDataKinds.Contactables.PHOTO_URI);
-
-    cursor.moveToFirst();
-    String lookupKey = "";
-    WritableMap contact = Arguments.createMap();
-    WritableArray phoneNumbers = Arguments.createArray();
-    WritableArray emailAddresses = Arguments.createArray();
-    do {
-      String currentLookupKey = cursor.getString(lookupColumnIndex);
-
-      if (!lookupKey.equals(currentLookupKey)) { // new contact
-        if (!lookupKey.equals("")) { // push accumulated contact
-          contact.putArray("emailAddresses", emailAddresses);
-          contact.putArray("phoneNumbers", phoneNumbers);
-          contacts.pushMap(contact);
+        if (cursor.getCount() == 0) {
+          callback.invoke(null, contacts); // return empty if no contacts
+          return;
         }
-        lookupKey = currentLookupKey;
-        contact = Arguments.createMap();
-        phoneNumbers = Arguments.createArray();
-        emailAddresses = Arguments.createArray();
 
-        String id = cursor.getString(idColumnIndex);
-        contact.putInt("recordID", Integer.parseInt(id));
+        int idColumnIndex = cursor.getColumnIndex(CommonDataKinds.Contactables._ID);
+        int nameColumnIndex = cursor.getColumnIndex(CommonDataKinds.Contactables.DISPLAY_NAME);
+        int lookupColumnIndex = cursor.getColumnIndex(CommonDataKinds.Contactables.LOOKUP_KEY);
+        int typeColumnIndex = cursor.getColumnIndex(CommonDataKinds.Contactables.MIMETYPE);
+        int photoColumnIndex = cursor.getColumnIndex(CommonDataKinds.Contactables.PHOTO_URI);
 
-        // add photo
-        String photoURI = cursor.getString(photoColumnIndex);
-        contact.putString("thumbnailPath", photoURI == null ? "" : photoURI);
+        cursor.moveToFirst();
+        String lookupKey = "";
+        WritableMap contact = Arguments.createMap();
+        WritableArray phoneNumbers = Arguments.createArray();
+        WritableArray emailAddresses = Arguments.createArray();
+        do {
+          String currentLookupKey = cursor.getString(lookupColumnIndex);
 
-        // add name fields
-        String displayName = cursor.getString(nameColumnIndex);
-        contact.putString("givenName", displayName);
-        contact.putString("middleName", "");
-        contact.putString("familyName", "");
+          if (!lookupKey.equals(currentLookupKey)) { // new contact
+            if (!lookupKey.equals("")) { // push accumulated contact
+              contact.putArray("emailAddresses", emailAddresses);
+              contact.putArray("phoneNumbers", phoneNumbers);
+              contacts.pushMap(contact);
+            }
+            lookupKey = currentLookupKey;
+            contact = Arguments.createMap();
+            phoneNumbers = Arguments.createArray();
+            emailAddresses = Arguments.createArray();
 
-        String mimeType = cursor.getString(typeColumnIndex);
-        if (mimeType.equals(CommonDataKinds.Phone.CONTENT_ITEM_TYPE)) {
-          WritableMap phoneNoMap = parsePhoneRow(cursor);
-          phoneNumbers.pushMap(phoneNoMap);
-        } else if (mimeType.equals(CommonDataKinds.Email.CONTENT_ITEM_TYPE)) {
-          WritableMap emailMap = parseEmailRow(cursor);
-          emailAddresses.pushMap(emailMap);
-        }
-      } else { // same contact
-        String mimeType = cursor.getString(typeColumnIndex);
-        if (mimeType.equals(CommonDataKinds.Phone.CONTENT_ITEM_TYPE)) {
-          WritableMap phoneNoMap = parsePhoneRow(cursor);
-          phoneNumbers.pushMap(phoneNoMap);
-        } else if (mimeType.equals(CommonDataKinds.Email.CONTENT_ITEM_TYPE)) {
-          WritableMap emailMap = parseEmailRow(cursor);
-          emailAddresses.pushMap(emailMap);
-        }
+            String id = cursor.getString(idColumnIndex);
+            contact.putInt("recordID", Integer.parseInt(id));
+
+            // add photo
+            String photoURI = cursor.getString(photoColumnIndex);
+            contact.putString("thumbnailPath", photoURI == null ? "" : photoURI);
+
+            // add name fields
+            String displayName = cursor.getString(nameColumnIndex);
+            contact.putString("givenName", displayName);
+            contact.putString("middleName", "");
+            contact.putString("familyName", "");
+
+            String mimeType = cursor.getString(typeColumnIndex);
+            if (mimeType.equals(CommonDataKinds.Phone.CONTENT_ITEM_TYPE)) {
+              WritableMap phoneNoMap = parsePhoneRow(cursor);
+              phoneNumbers.pushMap(phoneNoMap);
+            } else if (mimeType.equals(CommonDataKinds.Email.CONTENT_ITEM_TYPE)) {
+              WritableMap emailMap = parseEmailRow(cursor);
+              emailAddresses.pushMap(emailMap);
+            }
+          } else { // same contact
+            String mimeType = cursor.getString(typeColumnIndex);
+            if (mimeType.equals(CommonDataKinds.Phone.CONTENT_ITEM_TYPE)) {
+              WritableMap phoneNoMap = parsePhoneRow(cursor);
+              phoneNumbers.pushMap(phoneNoMap);
+            } else if (mimeType.equals(CommonDataKinds.Email.CONTENT_ITEM_TYPE)) {
+              WritableMap emailMap = parseEmailRow(cursor);
+              emailAddresses.pushMap(emailMap);
+            }
+          }
+        } while (cursor.moveToNext());
+        cursor.close();
+
+        // push last contact
+        contact.putArray("emailAddresses", emailAddresses);
+        contact.putArray("phoneNumbers", phoneNumbers);
+        contacts.pushMap(contact);
+
+        callback.invoke(null, contacts);
       }
-    } while (cursor.moveToNext());
-    cursor.close();
-
-    // push last contact
-    contact.putArray("emailAddresses", emailAddresses);
-    contact.putArray("phoneNumbers", phoneNumbers);
-    contacts.pushMap(contact);
-
-    callback.invoke(null, contacts);
+    }.execute();
   }
 
   /*
