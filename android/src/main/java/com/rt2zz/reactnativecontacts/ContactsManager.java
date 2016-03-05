@@ -5,6 +5,7 @@ import android.content.ContentResolver;
 import android.content.Context;
 import android.database.Cursor;
 import android.provider.ContactsContract;
+import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
@@ -45,7 +46,20 @@ public class ContactsManager extends ReactContextBaseJavaModule {
         String selection = ContactsContract.Contacts.IN_VISIBLE_GROUP + " = " + 1;
         String sortBy = CommonDataKinds.Contactables.LOOKUP_KEY;
 
-        Cursor cursor = cr.query(uri, null, selection, null, sortBy);
+        String[] projection = new String[] {
+            Contacts._ID,
+            Contacts.DISPLAY_NAME,
+            Contacts.LOOKUP_KEY,
+            CommonDataKinds.Contactables.MIMETYPE,
+            CommonDataKinds.Email.ADDRESS,
+            CommonDataKinds.Email.TYPE,
+            CommonDataKinds.Email.LABEL,
+            CommonDataKinds.Phone.NUMBER,
+            CommonDataKinds.Phone.TYPE,
+            CommonDataKinds.Phone.LABEL
+        };
+
+        Cursor cursor = cr.query(uri, projection, selection, null, null);
 
         WritableArray contacts = Arguments.createArray(); // resultSet
 
@@ -58,7 +72,6 @@ public class ContactsManager extends ReactContextBaseJavaModule {
         int nameColumnIndex = cursor.getColumnIndex(CommonDataKinds.Contactables.DISPLAY_NAME);
         int lookupColumnIndex = cursor.getColumnIndex(CommonDataKinds.Contactables.LOOKUP_KEY);
         int typeColumnIndex = cursor.getColumnIndex(CommonDataKinds.Contactables.MIMETYPE);
-        int photoColumnIndex = cursor.getColumnIndex(CommonDataKinds.Contactables.PHOTO_URI);
 
         cursor.moveToFirst();
         String lookupKey = "";
@@ -81,10 +94,6 @@ public class ContactsManager extends ReactContextBaseJavaModule {
 
             String id = cursor.getString(idColumnIndex);
             contact.putInt("recordID", Integer.parseInt(id));
-
-            // add photo
-            String photoURI = cursor.getString(photoColumnIndex);
-            contact.putString("thumbnailPath", photoURI == null ? "" : photoURI);
 
             // add name fields
             String displayName = cursor.getString(nameColumnIndex);
